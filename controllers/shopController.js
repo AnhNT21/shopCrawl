@@ -61,6 +61,7 @@ exports.getAllProducts = async (req, res) => {
     try {
         await page.goto(`https://shopee.vn/${shop_id}#product_list`, { waitUntil: 'networkidle2' });
         await checkUrls(page, msg);
+        if (msg.length) return res.json({ msg, allProducts });
         log(`Opened Shop ${shop_id} page`);
 
         const numberOfPage = await page.$eval('.shopee-mini-page-controller__total', (el) => el.textContent.trim()).catch(() => null);
@@ -112,6 +113,4 @@ const checkUrls = async (page, msg) => {
         msg.push('Pls Login again');
         log('Pls Login again', 'warning');
     }
-
-    return msg;
 };
