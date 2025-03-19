@@ -1,12 +1,17 @@
 # Getting Started
 
+## Downloads
+
+-   Tải File: [browser.zip](https://drive.google.com/drive/folders/13lKwYRoA6rRgM3a70EdynPuf-4cY0Rft?usp=share_link)
+-   Giải nén file `browser.zip` vào folder gốc của project
+
 ## Installation
 
 1. **Clone the repository**
 
     ```sh
-    git clone <repository-url>
-    cd <project-folder>
+    git clone https://github.com/AnhNT21/shopCrawl.git
+    cd shopCrawl
     ```
 
 2. **Install dependencies**
@@ -19,7 +24,6 @@
 
     - Copy `.env.example` thành `.env` và cập nhật
     - File `settings.js`: Chứa các cái đặt liên quan tới trình duyệt anti-detect
-    - Giải nén file `browsers.zip` vào folder gốc của project
 
 4. **Run App**
     ```sh
