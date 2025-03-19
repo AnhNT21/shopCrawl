@@ -6,7 +6,7 @@ const { getExecutable, saveToFile, log } = require('../utils/utils');
 let browser = null;
 
 exports.getAllProducts = async (req, res) => {
-    const shop_id = req.params.shop_id.startsWith('@') ? req.params.shop_id.slice(1) : req.params.shop_id;
+    const shop_username = req.params.shop_username.startsWith('@') ? req.params.shop_username.slice(1) : req.params.shop_username;
     let headless = req.query.browser ? (req.query.browser == 'true' ? false : true) : settings.BROWSER.HEADLESS;
     let allProducts = [];
     let totalProducts = 0;
@@ -16,20 +16,12 @@ exports.getAllProducts = async (req, res) => {
         return res.json({ msg: 'Server busy, try again in few minutes' });
     }
 
-    browser = await puppeteer.launch({
-        headless,
-        defaultViewport: null,
-        ignoreDefaultArgs: ['--enable-automation'],
-        executablePath: getExecutable(),
-        args: [`--user-data-dir=${settings.BROWSER.CHROME_PROFILE_PATH}`, ...settings.BROWSER.ARGS],
-    });
-    log(`browser Opened`);
+    browser = await openBrowser(headless);
 
     // const page = await browser.newPage();
     const pages = await browser.pages();
     const page = pages[0];
-    await page.setUserAgent(settings.BROWSER.USER_AGENT);
-    await page.setExtraHTTPHeaders(settings.BROWSER.HEADER);
+    await configurePage(page);
 
     page.on('response', async (response) => {
         const url = response.url();
@@ -39,30 +31,16 @@ exports.getAllProducts = async (req, res) => {
                 totalProducts = json.data.total;
                 allProducts = allProducts.concat(json.data.centralize_item_card.item_cards);
             } catch (error) {
-                console.error('Error parsing response:', error);
+                log('Error parsing response:', 'error');
             }
         }
     });
 
-    await page.evaluateOnNewDocument(() => {
-        const disableAnimations = () => {
-            const style = document.createElement('style');
-            style.innerHTML = `
-                * { 
-                    animation: none !important; 
-                    transition: none !important; 
-                }
-            `;
-            document.head.appendChild(style);
-        };
-        disableAnimations();
-    });
-
     try {
-        await page.goto(`https://shopee.vn/${shop_id}#product_list`, { waitUntil: 'networkidle2' });
+        await page.goto(`https://shopee.vn/${shop_username}#product_list`, { waitUntil: 'networkidle2' });
         await checkUrls(page, msg);
         if (msg.length) return res.json({ msg, allProducts });
-        log(`Opened Shop ${shop_id} page`);
+        log(`Opened Shop ${shop_username} page`);
 
         const numberOfPage = await page.$eval('.shopee-mini-page-controller__total', (el) => el.textContent.trim()).catch(() => null);
         if (numberOfPage > 1) {
@@ -79,8 +57,8 @@ exports.getAllProducts = async (req, res) => {
             msg = '!!! Not equal';
         }
 
-        saveToFile(`${shop_id}.json`, allProducts);
-        log(`${shop_id}.json Saved`);
+        saveToFile(`${shop_username}.json`, allProducts);
+        log(`${shop_username}.json Saved`);
 
         browser.close();
         return res.json({ msg, allProducts });
@@ -91,9 +69,99 @@ exports.getAllProducts = async (req, res) => {
 };
 
 exports.getAllProductsCached = async (req, res) => {
-    const shop_id = req.params.shop_id.startsWith('@') ? req.params.shop_id.slice(1) : req.params.shop_id;
-    const data = await JSON.parse(fs.readFileSync(`./data/${shop_id}.json`, { encoding: 'utf8' }));
+    const shop_username = req.params.shop_username.startsWith('@') ? req.params.shop_username.slice(1) : req.params.shop_username;
+    const data = await JSON.parse(fs.readFileSync(`./data/${shop_username}.json`, { encoding: 'utf8' }));
     return res.json(data);
+};
+
+exports.getProductDetail = async (req, res) => {
+    const { item_name, shopid, itemid } = req.query;
+    let headless = req.query.browser ? (req.query.browser == 'true' ? false : true) : settings.BROWSER.HEADLESS;
+    let msg = [];
+    if (!item_name || !shopid) {
+        return res.status(400).json({ msg: 'Missing required query parameters: item_name or shopid' });
+    }
+
+    const productLink = generateProductLink(item_name, itemid, shopid);
+
+    const browser = await openBrowser(headless);
+    const page = await browser.newPage();
+    await configurePage(page, msg);
+
+    let productDetail = null;
+
+    page.on('response', async (response) => {
+        const url = response.url();
+        if (url.includes('/api/v4/pdp/get_pc')) {
+            try {
+                const json = await response.json();
+                productDetail = json.data.item;
+            } catch (error) {
+                log('Error parsing product detail response:', 'error');
+            }
+        }
+    });
+
+    try {
+        await page.goto(productLink, { waitUntil: 'networkidle2' });
+        await checkUrls(page, []);
+        if (!productDetail.title) {
+            log('Failed to fetch product details', 'warning');
+            return res.status(500).json({ msg: 'Failed to fetch product details' });
+        }
+
+        browser.close();
+        return res.json({ msg: '', productDetail });
+    } catch (e) {
+        log(e, 'error');
+        browser.close();
+        return res.status(500).json(e);
+    }
+};
+
+const configurePage = async (page) => {
+    await page.setUserAgent(settings.BROWSER.USER_AGENT);
+    await page.setExtraHTTPHeaders(settings.BROWSER.HEADER);
+
+    await page.evaluateOnNewDocument(() => {
+        (() => {
+            const style = document.createElement('style');
+            style.innerHTML = `
+                * { 
+                    animation: none !important; 
+                    transition: none !important; 
+                }
+            `;
+            document.head.appendChild(style);
+        })();
+    });
+
+    log('Page configured');
+};
+
+const generateProductLink = (itemName, itemId, shopId) => {
+    const slug = itemName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+
+    return `https://shopee.vn/${slug}-i.${shopId}.${itemId}`;
+};
+
+const openBrowser = async (headless = settings.BROWSER.HEADLESS) => {
+    const browser = await puppeteer.launch({
+        headless,
+        defaultViewport: null,
+        ignoreDefaultArgs: ['--enable-automation'],
+        executablePath: getExecutable(),
+        args: [`--user-data-dir=${settings.BROWSER.CHROME_PROFILE_PATH}`, ...settings.BROWSER.ARGS],
+    });
+    log('Browser opened');
+    return browser;
 };
 
 const checkUrls = async (page, msg) => {
