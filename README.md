@@ -1,5 +1,12 @@
 # Getting Started
 
+## Important
+
+-   Ở những lần chạy đầu tiên API có thể sẽ trả về lỗi như:
+    -   `Traffic error`: Lỗi traffic, có thể thử lại bằng cách sửa thông số anti-detect hoặc IP
+    -   `Pls Solve captcha`: Shopee yêu cầu giải captcha, Chạy trình duyệt lên bằng Query `browser=true` như hướng dẫn ở dưới để mở trình duyệt và giải captcha thủ công. Hoặc cài extention giải tự động (noCaptchaAI)
+    -   `Pls Login again`: Shopee Yêu cầu đăng nhập, Chạy trình duyệt lên bằng Query `browser=true` để đăng nhập.
+
 ## Downloads
 
 -   Tải File: [browser.zip](https://drive.google.com/drive/folders/13lKwYRoA6rRgM3a70EdynPuf-4cY0Rft?usp=share_link)
